@@ -21,4 +21,4 @@ Programming languages and libraries used:
 
 ![google trends plot](./images/google_trends.png)
 
-Click [here](capstone_project.nb.html) for the code notebook rendered in html.
+Click [here](https://jdg0711.github.io/analyzing_presidential_tweets/capstone_project.nb.html) for the code notebook rendered in html.
