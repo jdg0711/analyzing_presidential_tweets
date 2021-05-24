@@ -1,0 +1,193 @@
+---
+title: "R Capstone Project"
+output: html_notebook
+---
+
+It’s time to put your data analysis skills to the test. For this project, you will be asked to create a report using RStudio describing a research project that you conduct. On this page, we’ll describe what data sources your project should use and the format of the report that you should produce. We’ll also provide you with an example report that we created.  
+
+This project is meant to be fairly independent. No two projects will be identical -- we want you to research something that you’re personally interested in. No matter what topic you choose, this project should test your skills in the following areas:
+
+* Finding and exploring new datasets
+* Manipulating and cleaning those datasets to help answer your essential questions
+* Creating visualizations from those datasets
+* Building statistical models
+
+While making your project, we expect that you will run into tasks that you’ve never done before in a Codecademy lesson. That’s a good thing! Take this as an opportunity to apply all of your understanding of R and learn something new.  
+
+# What Data To Use
+For this project, we want you to investigate a topic of your choosing using Google Trends data. Using the R package gtrendsR, you can get data about any google search term. You can find information like the popularity of that search term over time, the location where that search term was commonly used, and other phrases related to that search term.  
+Make sure to download and install gtrendsR in RStudio.  
+
+You can learn more about gtrendsR by looking at the documentation. Take a look at the geo argument — using that argument can add some interesting data to your data frames. You can also look at some of the code in our example report included below.
+
+In addition to using Google Trends data, we want you to include data from one additional source that is related to your search terms. You’ll see that in our example report, we found data related to the stock prices of Netflix, Amazon, Disney, and HBO. We were curious about how the shows in our search terms related to the stock prices of each company.
+
+You don’t have to use stock data. Try to find a data set that will help you answer the questions you have about your search terms.
+
+# The Format
+When creating your report, make sure to include the following sections. Again, you can use our report as a template.
+
+1. **Introduction** -- Introduce the purpose of the project. What are the essential questions that you’re trying to answer through statistical analysis? For our report, our essential question was “How do new releases affect the value of streaming services?”
+2. **Analysis** -- What did you do to try to answer your essential questions? What data sets did you use? How did you clean or manipulate those data sets? What assumptions did you make along the way? Show the visualizations that you made and describe what they show. Were you able to make any statistical models? This should be the bulk of your report — tell us what you did and whether or not you were able to answer your essential questions.
+3. **Conclusion and Further Work** -- Briefly summarize your findings and describe what you would do if you were to continue your project. Would you look for more datasets? Would you dig deeper into part of the data you didn’t have a chance to work with?
+
+## 1. Introduction
+Given the vagueness of the project and the requirement to use Google Trends data I ultimately decided to look at searches for medical symptoms like headaches and heartburn during the Trump presidency. I'll then look into Trump's use of Twitter to see if there's any correlation with searches for certain medical symptoms.  
+For my report the essential question is **"How does former President Trump's use of Twitter impact Google searches for certain medical symptoms?"**
+
+## 2. Analyis
+First I needed to find a dataset containing all of the tweets sent by Trump during his presidency.  
+Fortunately I found a website that logged all of Trump's tweets and downloaded a dataset for evaluation. Source: [The Trump Archive](https://web.archive.org/web/20210109031942/https://www.thetrumparchive.com/)
+
+
+```{r}
+# First, load libraries
+library(tidyverse)
+library(dplyr)
+```
+
+```{r}
+# Next, read in dataset of Donald Trump's tweets
+tweets <- read.csv("trump_tweets.csv")
+str(tweets)
+```
+
+```{r}
+# Clean the data
+# drop columns we don't need
+tweets <- subset(tweets, select = -c(id, device))
+head(tweets, 5)
+```
+
+```{r}
+# Adjust and filter date range
+# add column for date in YYYY-MM-DD format
+tweets$ymd <- as.Date(tweets$date, format = "%Y-%m-%d")
+
+# filter to date range when Trump in office as president
+# note: Twitter suspended Trump's account (1/8/21) before he left office (1/20/21)
+tweets <- tweets %>% filter(ymd >= "2017-01-20")
+nrow(tweets)
+```
+```{r}
+# Visualize the data
+# plot Trump's tweet count over time
+ggplot(tweets, aes(x= ymd)) +
+  geom_bar(color = "blue") +
+  labs(title = "Trump's Tweets During Presidency", x = "Date", y = "Daily Tweets") +
+  ggthemes::theme_economist_white()
+```
+The other data source I used was Google Trends data using the gtrendsR library. This library returns the popularity of Google search terms over time. Using this data, I evaluated searches for common medical symptoms during the Trump presidency.
+
+```{r}
+# use gtrendsR to obtain Google Trends query for medical symptoms
+library(gtrendsR)
+trends <- gtrends(keyword = c("nausea", "stress", "heartburn", "headache"),
+                  geo = "US", time = "2017-01-20 2021-01-08")
+summary(trends)
+```
+
+
+```{r}
+# Visualize Trends data
+# plot interest over time for each keyword
+trends$interest_over_time %>%
+  ggplot(aes(x = date, y = hits)) +
+  geom_line(color = "blue") +
+  facet_wrap(~keyword) +
+  ggthemes::theme_economist_white()
+```
+Interesting! Let's have a look at the same data in one graph.
+
+```{r}
+ggplot(trends$interest_over_time) + 
+  geom_line(aes(date, hits, color = keyword)) +
+  scale_color_discrete(name = "Symptom", labels = c("Headache", "Heartburn", "Nausea", "Stress" )) + 
+  labs(title = "Google Trends Data For Medical Symptoms", y = "Hits (Normalized to be between 0 and 100)", x = "Date") +
+  ggthemes::theme_economist_white()
+```
+### Takeaways:
+I can see that searches for "headaches" and "stress" were the most common.  
+Next I'll look to see if there are any interesting regional trands.  
+
+
+```{r}
+library(maps)
+
+# Getting trends by state. Lowercasing the name of the state to match with the map data
+states <- trends$interest_by_region
+states <- states %>% mutate(location = tolower(location))
+
+# Getting the map data
+states_map <- map_data("state")
+
+# Plotting the map
+states %>% ggplot(aes(map_id = location)) +
+  geom_map(aes(fill = hits), map = states_map) +
+  expand_limits(x = states_map$long, y = states_map$lat) + 
+  facet_wrap(~ keyword, nrow = 2) + 
+  labs(title = "Google Trend Data For Medical Symptoms By State", x = "Longitude", y = "Latitude") + 
+  scale_fill_continuous(name = "Hits (Scaled to 100)")
+```
+### Takeaways:
+It seems the Southeast was experiencing headaches and nausea while the middle of the country was feeling heartburn and everyone was stressed out except those in Nevada and Florida. Apparently gambling and sunshine are great stress reducers!
+
+To continue this ridiculous exercise, let's drill down to the election year 2020 when Trump's tweets were at their most fervent.
+
+```{r}
+# limit Trump tweets to 2020
+recent_tweets <- tweets %>% filter(ymd >= "2020-01-01" & ymd < "2021-01-01")
+ggplot(recent_tweets, aes(ymd)) +
+  geom_bar(color = "blue") +
+  labs(title = "Trump Tweets in 2020", x = "Date", y = "Daily Tweets")
+```
+Let's reshape the Trends data to match the same timeframe.
+
+```{r}
+recent_trends <- trends$interest_over_time %>% 
+  filter(date >= "2020-01-01" & date < "2021-01-01")
+ggplot(recent_trends, aes(date, hits, color= keyword)) +
+  geom_line() +
+  labs(title = "Medical Sympotm Trends in 2020")
+```
+OK, now let's see them side by side.
+
+
+```{r}
+#Plotting tweets and trends on the same graph for headaches and stress. Note that we adjust the scale of the Trends axis
+ggplot() + geom_bar(recent_tweets, mapping = aes(x = ymd)) +  
+  geom_line(filter(recent_trends), mapping = aes(as.Date(date), hits, color = keyword)) +
+  scale_y_continuous(name = "Daily Tweets", sec.axis = sec_axis(~./1, name="Google Trends Hits")) + 
+  labs(title = "Trump Tweets and Google Trends", x = "Date") +
+  ggthemes::theme_economist_white()
+
+```
+## Checking For Linear Regression
+Finally, I'm required to complete a linear regression model. The data I've chosen for this project doesn't lend itself to a linear model at all, but here's proof I can complete a simple model using R.
+
+I also added a LOESS smoother to visualize the regression line, just for kicks.
+
+```{r}
+# Plotting Tweets: Faves vs Retweets and adding a LOESS smoother
+recent_tweets %>% ggplot(aes(x = favorites, y = retweets)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  geom_smooth(se = FALSE, color = "red") + 
+  labs(title = "Trump Tweets: Faves vs Retweets", x = "Favorites", y = "Retweets")
+```
+## 3. Conclusion
+
+Well, people in the US definitely felt some headaches, stress, heartburn, and nausea during 2020 in the lead-up to a presidential election.  
+Specifically, searches for headaches hit the highest peak during that time, but searches for stress seem to most closely follow the number of tweets from then President Trump.  
+
+Did Trump's tweeting result in an increase of medical issues which in turn brought on an increase in Google searches for symptomatic treatment? **Yes!** Well, actually there's **no** way to know for sure. At least this exercise is not a way to know for sure.  
+
+Regarding the linear regression model, is there a linear relationship between the number of favorites and number of retweets a given tweet has? **Sure.** Is that meaningful? **No.**    
+It stands to reason that a more popular tweet will gain more retweets and more favorites.  
+
+Are there additional data sets available to try to answer the initial question? Probably. Is it worth anyone's time to do so? Clearly no.  
+
+As a final note I'll say that I couldn't take the research topic all that seriously as we're limited to use Googe Trends to try to answer a question. I did take the data acquisition and cleaning, as well as the visualizations seriously. The ultime goal for me was to learn more R and demonstrate an ability to use it for a more meaningful purpose in the real world.  
+
+-30-
+
